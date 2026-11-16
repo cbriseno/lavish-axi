@@ -1468,12 +1468,11 @@ export async function serve({
 
   app.get("/session/:key", async (req, res, next) => {
     try {
-      const chromeLoad = await store.issueReviewerHandoff(req.params.key);
-      if (!chromeLoad) {
+      const session = await store.findByKey(req.params.key);
+      if (!session) {
         sendSessionNotFound(req, res);
         return;
       }
-      const session = chromeLoad.session;
       if (refuseNonHtmlArtifact(session, res)) return;
       await watchSession(session, watchers, events, logEvent, reloadDebounceMs);
       const artifactHtml = await readFile(session.file, "utf8").catch(() => "");
@@ -1492,10 +1491,6 @@ export async function serve({
           layoutGateEnabled: shouldEnableLayoutGate(req.query || {}),
           faviconTag,
           title: title ? `${title} · Lavish` : "Lavish Editor",
-          artifactRevision: chromeLoad.artifact_revision,
-          artifactLoadToken: chromeLoad.artifact_load_token,
-          artifactLoadSequence: chromeLoad.artifact_load_sequence,
-          chromeLoadToken: chromeLoad.chrome_load_token,
           attachmentMaxBytes: attachmentConfig.maxBytes,
           attachmentMaxCount: attachmentConfig.maxPerPrompt,
         }),

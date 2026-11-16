@@ -787,6 +787,19 @@ test("a reconnect cannot settle an identical note this tab never submitted", asy
   assert.equal(postedBodies[0].prompts[0].prompt, "Same note");
 });
 
+test("the composer draft survives reload and clears when queued", async () => {
+  const storage = new Map();
+  const first = await createChromeHarness({ storage });
+  first.element("chatInput").value = "Unsent draft";
+  first.element("chatInput").dispatch("input");
+  const reloaded = await createChromeHarness({ storage });
+  assert.equal(reloaded.element("chatInput").value, "Unsent draft");
+  reloaded.element("send").click();
+  const afterSend = await createChromeHarness({ storage });
+  assert.equal(afterSend.element("chatInput").value, "");
+  assert.equal(afterSend.queued()[0].prompt, "Unsent draft");
+});
+
 test("a queued send stalled at POST becomes visibly recoverable", async () => {
   const chrome = await createChromeHarness({
     fetchImpl: async (url) => {

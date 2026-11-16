@@ -52,8 +52,22 @@ function normalizeCssForAssertions(css) {
     .replace(/0\./g, ".");
 }
 
+async function claimChrome(base, key) {
+  const response = await fetch(`${base}/api/${key}/chrome-loads/begin`, {
+    method: "POST",
+    headers: { origin: base },
+  });
+  assert.equal(response.status, 200);
+  const handoff = await response.json();
+  return {
+    chromeLoadToken: handoff.chrome_load_token,
+    initialArtifactLoadToken: handoff.artifact_load_token,
+    initialArtifactLoadSequence: handoff.artifact_load_sequence,
+  };
+}
+
 async function beginArtifactLoad(base, key) {
-  const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
+  const chrome = await claimChrome(base, key);
   const response = await fetch(`${base}/api/${key}/artifact-loads/begin`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -2840,7 +2854,7 @@ test("an older overlapping begin request cannot replace the current epoch", asyn
       body: JSON.stringify({ file: artifact }),
     });
     const { key } = await open.json();
-    const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
+    const chrome = await claimChrome(base, key);
     const begin = (requestId, requestSequence) =>
       fetch(`${base}/api/${key}/artifact-loads/begin`, {
         method: "POST",
@@ -2880,7 +2894,7 @@ test("begin-load requires the current chrome handoff before any first or direct 
       body: JSON.stringify({ file: artifact }),
     });
     const { key } = await open.json();
-    const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
+    const chrome = await claimChrome(base, key);
     const begin = (body) =>
       fetch(`${base}/api/${key}/artifact-loads/begin`, {
         method: "POST",
@@ -2928,7 +2942,7 @@ test("reopening a session preserves the existing chrome handoff and artifact loa
       body: JSON.stringify({ file: artifact }),
     });
     const { key } = await open.json();
-    const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
+    const chrome = await claimChrome(base, key);
     const begin = (requestId, requestSequence) =>
       fetch(`${base}/api/${key}/artifact-loads/begin`, {
         method: "POST",
@@ -2955,6 +2969,35 @@ test("reopening a session preserves the existing chrome handoff and artifact loa
     assert.equal(preservedDocument.status, 200);
     assert.equal(secondLoad.artifact_revision, firstLoad.artifact_revision + 1);
     assert.equal((await fetch(artifactLoadUrl(base, key, secondLoad))).status, 200);
+  } finally {
+    await server.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a plain session GET does not displace the active reviewer", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "lavish-serve-"));
+  const artifact = path.join(dir, "artifact.html");
+  await writeFile(artifact, "<!doctype html><html><body></body></html>");
+  const server = await serve({ port: 0, stateFile: path.join(dir, "state.json"), version: "9.9.9-test" });
+  try {
+    const base = `http://127.0.0.1:${server.port}`;
+    const { key } = await fetch(`${base}/api/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ file: artifact }),
+    }).then((response) => response.json());
+    const handoff = await fetch(`${base}/api/${key}/chrome-loads/begin`, {
+      method: "POST",
+      headers: { origin: base },
+    }).then((response) => response.json());
+    await fetch(`${base}/session/${key}`);
+    const response = await fetch(`${base}/api/${key}/artifact-loads/begin`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ request_id: "active", request_sequence: 1, chrome_load_token: handoff.chrome_load_token }),
+    });
+    assert.equal(response.status, 200);
   } finally {
     await server.close();
     await rm(dir, { recursive: true, force: true });
@@ -3011,8 +3054,7 @@ test("a refreshed chrome receives a new handoff and establishes the newest load"
       body: JSON.stringify({ file: artifact }),
     });
     const { key } = await open.json();
-    const loadChrome = async () =>
-      chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
+    const loadChrome = async () => claimChrome(base, key);
     const begin = (chrome, requestId, requestSequence) =>
       fetch(`${base}/api/${key}/artifact-loads/begin`, {
         method: "POST",
@@ -3045,9 +3087,7 @@ test("a refreshed chrome receives a new handoff and establishes the newest load"
     await server.close();
     server = await serve({ port: 0, stateFile, version: "9.9.9-test" });
     const restartedBase = `http://127.0.0.1:${server.port}`;
-    const restartedChrome = chromeSessionData(
-      await fetch(`${restartedBase}/session/${key}`).then((response) => response.text()),
-    );
+    const restartedChrome = await claimChrome(restartedBase, key);
     // The replacement server adopts the live load from state.json, so a chrome that renders
     // against it is handed the same token the previous server issued, and the artifact the
     // reviewer already has open keeps answering.

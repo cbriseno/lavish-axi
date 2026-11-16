@@ -5,6 +5,7 @@ const sessionData = JSON.parse(sessionDataElement?.textContent || "{}");
 const key = String(sessionData.key || "");
 const filePath = String(sessionData.file || "");
 const queueStorageKey = "lavish-axi:queued:" + key;
+const composerStorageKey = "lavish-axi:composer:" + key;
 const terminalStorageKey = "lavish-axi:terminal:" + key;
 // Review-chrome state that must survive a browser refresh. Keyed per session so one review's
 // triage can never leak into another artifact's.
@@ -2053,6 +2054,7 @@ function sendQueued(endAfter) {
       // becomes a sent bubble only when the server's transcript carries it (see submitQueuedOnce).
       render();
       chatInput.value = "";
+      saveJsonState(composerStorageKey, "");
       chatAttachmentController.reset();
     }
   }
@@ -3530,6 +3532,13 @@ async function replaceArtifactFrame({ recoveryRetry = false } = {}) {
   let load;
   let transportAttempt = 0;
   let handoffRefreshAttempted = false;
+  if (!chromeLoadToken) {
+    try {
+      if (!(await refreshChromeLoadHandoff(requestSequence))) return false;
+    } catch {
+      return recoverLater();
+    }
+  }
   while (true) {
     if (requestSequence !== artifactLoadRequestSequence || ended) return false;
     try {
@@ -4662,7 +4671,12 @@ chatInput.addEventListener("keydown", (event) => {
     sendQueued(false);
   }
 });
-chatInput.addEventListener("input", () => hideSendHint());
+const storedComposer = loadJsonState(composerStorageKey, "");
+if (typeof storedComposer === "string") chatInput.value = storedComposer;
+chatInput.addEventListener("input", () => {
+  saveJsonState(composerStorageKey, chatInput.value);
+  hideSendHint();
+});
 copyPathButton.onclick = copyFilePath;
 reloadArtifactButton.onclick = reloadArtifact;
 copySnapshotButton.onclick = copyDomSnapshot;
