@@ -89,6 +89,7 @@ function createElement(tag) {
     scrollIntoView() {},
     attachShadow() {
       const shadowRoot = createElement("shadow-root");
+      shadowRoot.host = element;
       // A new Reveal drops the previous marker by querying the shadow root for its class, so that
       // query answers with the markers actually appended there.
       shadowRoot.querySelectorAll = (selector) =>

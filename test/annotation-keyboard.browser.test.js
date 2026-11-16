@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const runBrowserE2e = process.env.LAVISH_AXI_BROWSER_E2E === "1";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function run(command, args, env, timeout = 45_000) {
+function run(command, args, env, timeout = 90_000) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
@@ -41,6 +41,10 @@ const ARTIFACT_HTML = `<!doctype html>
 <body style="background:#fff;color:#111">
 <p id="slide">Slide 1</p>
 <p id="annotate-me">Annotate this paragraph.</p>
+<button onclick="document.querySelector('dialog').showModal()">Open dialog</button>
+<dialog><p>Dialog target</p><button onclick="this.parentElement.close()">Close dialog</button></dialog>
+<button popovertarget="popup">Open popover</button>
+<div id="popup" popover><p>Popover target</p></div>
 <script>
 var slide = 1;
 document.addEventListener("keydown", function (event) {
@@ -101,6 +105,19 @@ test(
       browser("click", `@${uidOf(browser("snapshot"), /button "Cancel"/)}`);
       const outside = browser("press", "ArrowRight");
       assert.match(outside, /"Slide 2"/, outside);
+
+      browser("click", `@${uidOf(browser("snapshot"), /button "Open dialog"/)}`);
+      browser("click", `@${uidOf(browser("snapshot"), /"Dialog target"/)}`);
+      assert.match(browser("type", "modal note"), /value="modal note"/);
+      assert.match(browser("press", "Enter"), /"modal note"/);
+      browser("click", `@${uidOf(browser("snapshot"), /button "Close dialog"/)}`);
+
+      browser("click", `@${uidOf(browser("snapshot"), /button "Open popover"/)}`);
+      browser("click", `@${uidOf(browser("snapshot"), /"Popover target"/)}`);
+      assert.match(browser("type", "popover note"), /value="popover note"/);
+      assert.match(browser("click", `@${uidOf(browser("snapshot"), /button "Queue"/)}`), /"popover note"/);
+      browser("click", `@${uidOf(browser("snapshot"), /"Annotate this paragraph\."/)}`);
+      assert.match(browser("type", "page note"), /value="page note"/);
     } finally {
       run(process.execPath, ["bin/lavish-axi.js", "stop", "--port", String(port)], lavishEnv, 15_000);
       run("chrome-devtools-axi", ["stop"], chromeEnv);
