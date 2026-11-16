@@ -3530,14 +3530,23 @@ test("event WebSocket preserves initial state and named live-event semantics", a
     const reply = await fetch(`${base}/api/${opened.key}/agent-reply`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: "live reply" }),
+      body: JSON.stringify({
+        text: "live reply",
+        metadata: { model: "test-model", reasoning: "high", project: "demo", task: "review" },
+      }),
     });
     assert.equal(reply.status, 200);
     const replyEvent = await nextMessage();
     assert.equal(replyEvent.type, "agent-reply");
     assert.deepEqual(
       { ...replyEvent.data, at: undefined },
-      { role: "agent", text: "live reply", html: "<p>live reply</p>", at: undefined },
+      {
+        role: "agent",
+        text: "live reply",
+        html: "<p>live reply</p>",
+        metadata: { model: "test-model", reasoning: "high", project: "demo", task: "review" },
+        at: undefined,
+      },
     );
     assert.ok(Number.isFinite(Date.parse(replyEvent.data.at)));
     const replySync = await nextMessage();

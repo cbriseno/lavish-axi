@@ -707,7 +707,7 @@ export class SessionStore {
     });
   }
 
-  async addAgentReply(key, text, { requireOpen = false } = {}) {
+  async addAgentReply(key, text, { requireOpen = false, metadata = undefined } = {}) {
     return this.runExclusive(async () => {
       const state = await this.readState();
       const session = state.sessions[key];
@@ -719,7 +719,15 @@ export class SessionStore {
       // Done (docs/delivery-acks.md): the reply answers what the agent has seen. Stamped in the same
       // write as the reply, with the reply's own time, and never on an entry no poll has delivered.
       stampDone(session.chat, at, normalizeRevision(session.closed_delivery_seq));
-      session.chat = [...(session.chat || []), { role: "agent", text: String(text || ""), at }];
+      const details = Object.fromEntries(
+        ["model", "reasoning", "harness", "chat_id", "herdr_pane", "project", "task"]
+          .filter((field) => typeof metadata?.[field] === "string" && metadata[field])
+          .map((field) => [field, metadata[field]]),
+      );
+      session.chat = [
+        ...(session.chat || []),
+        { role: "agent", text: String(text || ""), at, ...(Object.keys(details).length ? { metadata: details } : {}) },
+      ];
       applyTranscriptBound(session);
       session.chat_revision = normalizeRevision(session.chat_revision) + 1;
       session.updated_at = at;

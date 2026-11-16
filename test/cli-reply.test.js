@@ -202,12 +202,16 @@ test("reply exits 0 only after the server accepts, delivers the reply, and clear
       );
       assert.equal(working.data.mode, "agent-busy");
 
-      const replyPromise = runCli(["reply", artifact, "--agent-reply", "Decision recorded."], { env });
+      const replyPromise = runCli(
+        ["reply", artifact, "--agent-reply", "Decision recorded.", "--model", "test-model", "--project", "demo"],
+        { env },
+      );
       const accepted = await live.nextMatching(
         (message) => message.type === "agent-reply" && message.data.text === "Decision recorded.",
         "agent-reply event",
       );
       assert.match(accepted.data.html, /Decision recorded\./);
+      assert.deepEqual(accepted.data.metadata, { model: "test-model", project: "demo" });
       const waiting = await live.nextMatching(
         (message) => message.type === "agent-presence" && message.data.state === "waiting",
         "waiting presence",
@@ -226,6 +230,7 @@ test("reply exits 0 only after the server accepts, delivers the reply, and clear
 
     const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
     assert.equal(chrome.initialChat.at(-1).text, "Decision recorded.");
+    assert.deepEqual(chrome.initialChat.at(-1).metadata, { model: "test-model", project: "demo" });
     assert.match(chrome.initialChat.at(-1).html, /<p>Decision recorded\.<\/p>/);
 
     const fromFile = path.join(path.dirname(artifact), "reply.md");
@@ -393,15 +398,30 @@ test("reply rejects missing, conflicting, empty, and unreadable reply input", as
 
 test("poll --agent-reply still posts inside the poll and does not return a sent receipt", async () => {
   await withArtifact(async ({ artifact, env, base, key }) => {
-    const polled = await runCli(["poll", artifact, "--agent-reply", "Still posted by poll.", "--timeout-ms", "200"], {
-      env,
-    });
+    const polled = await runCli(
+      [
+        "poll",
+        artifact,
+        "--agent-reply",
+        "Still posted by poll.",
+        "--reasoning",
+        "high",
+        "--task",
+        "review",
+        "--timeout-ms",
+        "200",
+      ],
+      {
+        env,
+      },
+    );
     assert.equal(polled.status, 0, polled.stderr || polled.stdout);
     assert.match(polled.stdout, /status: waiting/);
     assert.doesNotMatch(polled.stdout, /status: sent/);
 
     const chrome = chromeSessionData(await fetch(`${base}/session/${key}`).then((response) => response.text()));
     assert.equal(chrome.initialChat.at(-1).text, "Still posted by poll.");
+    assert.deepEqual(chrome.initialChat.at(-1).metadata, { reasoning: "high", task: "review" });
   });
 });
 

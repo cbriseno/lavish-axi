@@ -863,8 +863,8 @@ export async function serve({
     }
   });
 
-  async function publishAgentReply(key, text, { requireOpen = false } = {}) {
-    const session = await store.addAgentReply(key, text, { requireOpen });
+  async function publishAgentReply(key, text, { requireOpen = false, metadata = undefined } = {}) {
+    const session = await store.addAgentReply(key, text, { requireOpen, metadata });
     if (!session || (requireOpen && session.status === "ended")) return session;
     const lastEntry = session.chat?.at(-1);
     const entry = serializeChat([
@@ -953,7 +953,7 @@ export async function serve({
         // Attaching a fresh round retires the prior delivery marker; releasing a poll never does.
         deliveredFeedback.delete(key);
         if (agentReply !== null) {
-          const session = await publishAgentReply(key, agentReply);
+          const session = await publishAgentReply(key, agentReply, { metadata: req.body?.metadata });
           if (!session) {
             activePolls.delete(key);
             return { missing: true };
@@ -1320,6 +1320,7 @@ export async function serve({
     try {
       const session = await publishAgentReply(req.params.key, String(req.body?.text || ""), {
         requireOpen: true,
+        metadata: req.body?.metadata,
       });
       if (!session) {
         res.status(404).json({ error: "session not found" });

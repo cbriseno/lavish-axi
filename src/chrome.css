@@ -1235,6 +1235,12 @@ body.lavish {
   letter-spacing: var(--track-label);
   text-transform: uppercase;
 }
+.agent-metadata {
+  color: var(--fg-faint);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  margin-bottom: 4px;
+}
 .bubble.user small {
   text-align: right;
 }

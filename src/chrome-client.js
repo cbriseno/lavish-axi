@@ -913,6 +913,14 @@ function chatBubbleHtml(entry) {
   if (entry.role === "agent") {
     return (
       "<small>Agent</small>" +
+      (entry.metadata
+        ? '<div class="agent-metadata">' +
+          ["model", "reasoning", "harness", "chat_id", "herdr_pane", "project", "task"]
+            .filter((key) => entry.metadata[key])
+            .map((key) => escapeHtml(key.replaceAll("_", " ") + ": " + entry.metadata[key]))
+            .join(" · ") +
+          "</div>"
+        : "") +
       (typeof entry.html === "string" && entry.html
         ? '<div class="chat-md">' + entry.html + "</div>"
         : '<div class="bubble-text">' + escapeHtml(entry.text) + "</div>")
